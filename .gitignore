@@ -7,3 +7,17 @@ reports/
 models/*
 !models/.gitkeep
 *.pt
+
+# Python
+*.pyc
+*.egg-info/
+
+# Modelos exportados
+*.onnx
+*_ncnn_model/
+
+# Editores / sistema
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

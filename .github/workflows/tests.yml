@@ -1,0 +1,19 @@
+name: Testes
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # Os testes não usam câmera, modelo nem servos: dispensa o ultralytics (pesado).
+      - name: Instalar dependências
+        run: pip install opencv-python-headless numpy pyyaml
+      - name: Rodar testes
+        run: python -m unittest discover tests -v
