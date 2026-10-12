@@ -1,0 +1,72 @@
+# Configuração da lixeira inteligente.
+# Tudo que você vai calibrar com o protótipo físico fica aqui — não no código.
+
+# Classes do modelo. A ordem não importa (o modelo YOLO guarda os nomes),
+# mas os nomes precisam bater com as pastas do dataset e com bin_angles abaixo.
+classes: [metal, papel, plastico]
+
+# Para onde vai um resíduo que o modelo não reconheceu com confiança.
+reject_label: indefinido
+
+camera:
+  backend: opencv          # opencv (webcam USB / notebook) | picamera2 (câmera CSI do Pi)
+  index: 0                 # índice da webcam (backend opencv)
+  width: 640
+  height: 480
+  warmup_frames: 15        # frames descartados no início (auto-exposição estabilizar)
+  # Região de interesse [x, y, largura, altura] em pixels: só a área de captura.
+  # null = imagem inteira. Use scripts/calibrate_roi.py para escolher.
+  roi: null
+
+presence:
+  # Detecção de "tem objeto na plataforma" por diferença com o fundo vazio.
+  background_frames: 20    # frames usados para aprender o fundo vazio
+  blur_ksize: 7            # suavização antes da diferença (ímpar)
+  diff_threshold: 30       # diferença de intensidade (0-255) para considerar pixel mudado
+  min_area_frac: 0.03      # fração mínima da ROI que precisa mudar para haver objeto
+  motion_frac: 0.004       # fração máxima de mudança entre frames seguidos para "parado"
+  stable_frames: 8         # quantos frames parados antes de classificar (mão já saiu)
+  clear_frames: 10         # quantos frames vazios para considerar plataforma livre
+  background_lr: 0.02      # taxa de atualização lenta do fundo quando vazio (deriva dos LEDs)
+
+classifier:
+  backend: yolo            # yolo | fake (teste sem modelo)
+  weights: models/best.pt  # .pt no PC; pasta *_ncnn_model ou .onnx no Raspberry Pi
+  imgsz: 224
+  device: cpu
+  conf_threshold: 0.70     # abaixo disso -> reject_label
+  votes: 3                 # nº de frames classificados e com probabilidades somadas
+
+actuators:
+  backend: mock            # mock (só imprime) | gpiozero (Raspberry Pi)
+  pin_factory: null        # null = padrão do gpiozero; "lgpio" no Pi 5, "pigpio" reduz tremor no Pi 4
+  rotation:
+    pin: 18
+    min_angle: 0
+    max_angle: 180
+    min_pulse_ms: 0.5      # ajuste conforme o datasheet do seu servo
+    max_pulse_ms: 2.5
+    settle_s: 0.8          # tempo para a base chegar e parar de oscilar
+  hatch:
+    pin: 13
+    min_angle: 0           # faixa física do servo (pulso mínimo/máximo)
+    max_angle: 180
+    closed_angle: 0
+    open_angle: 90
+    min_pulse_ms: 0.5
+    max_pulse_ms: 2.5
+    open_s: 1.0            # quanto tempo a escotilha fica aberta
+    settle_s: 0.4
+  home_angle: 90           # posição da base em repouso (sobre a área de captura)
+  return_home: true
+  # Ângulo da base para cada compartimento (calibre com scripts/servo_test.py).
+  bin_angles:
+    metal: 0
+    papel: 60
+    plastico: 120
+    indefinido: 180
+
+logging:
+  dir: logs                # events.csv com cada descarte (classe, confiança, tempos)
+  save_images: true        # guarda a imagem de cada descarte para virar dado de treino
+  images_dir: data/inbox   # data/inbox/<classe_prevista>/<timestamp>.jpg

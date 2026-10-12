@@ -1,0 +1,13 @@
+# Configuração do Raspberry Pi: herda tudo de config.yaml e troca só o hardware.
+extends: config.yaml
+
+camera:
+  backend: picamera2        # câmera CSI. Webcam USB no Pi? use opencv.
+
+classifier:
+  # Modelo exportado com: python scripts/export.py --weights models/best.pt --format ncnn
+  weights: models/best_ncnn_model
+
+actuators:
+  backend: gpiozero
+  pin_factory: lgpio        # Pi 5. No Pi 4 prefira "pigpio" (sudo systemctl start pigpiod)

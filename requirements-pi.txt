@@ -1,0 +1,9 @@
+# Raspberry Pi (Raspberry Pi OS 64-bit, Bookworm ou mais novo).
+# picamera2 e gpiozero já vêm no sistema: crie o venv com acesso a eles:
+#   python3 -m venv --system-site-packages .venv && source .venv/bin/activate
+#   pip install -r requirements-pi.txt
+ultralytics>=8.3     # roda o modelo .pt/NCNN; o export NCNN instala o pacote ncnn se faltar
+ncnn
+opencv-python-headless>=4.8
+numpy
+pyyaml

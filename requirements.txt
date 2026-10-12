@@ -1,0 +1,5 @@
+# PC / notebook / Colab (coleta, treino, avaliação, exportação, testes)
+ultralytics>=8.3
+opencv-python>=4.8
+numpy
+pyyaml
