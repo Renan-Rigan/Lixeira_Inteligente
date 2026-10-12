@@ -117,3 +117,33 @@ lixeira/                       câmera, presença, classificador, servos, pipeli
 scripts/                       coleta, dataset, treino, avaliação, exportação, calibração
 tests/                         testes com imagens sintéticas (sem hardware)
 ```
+
+## Fluxo de trabalho com branches
+
+```
+main  ← versão estável: só recebe PR vindo da dev
+ └─ dev  ← integração e testes (branch padrão)
+     ├─ feature/<nome>   novidade      → PR para dev
+     └─ fix/<nome>       correção      → PR para dev
+```
+
+1. **Criar a branch a partir da `dev` atualizada**
+   ```bash
+   git checkout dev
+   git pull origin dev
+   git checkout -b feature/minha-mudanca
+   ```
+2. **Trabalhar e testar localmente**
+   ```bash
+   python -m unittest discover tests -v
+   git add <arquivos>
+   git commit -m "Descreve a mudança"
+   git push -u origin feature/minha-mudanca
+   ```
+3. **Abrir PR `feature/minha-mudanca` → `dev`** no GitHub. O CI roda os testes
+   automaticamente; com tudo verde, faça o merge e apague a branch.
+4. **Testar a `dev`** (no PC e, quando fizer sentido, no Raspberry Pi).
+5. **Abrir PR `dev` → `main`** quando a `dev` estiver estável. A `main` é a versão
+   que vai para o protótipo e para os resultados da IC.
+
+Nunca faça commit direto na `main`.
