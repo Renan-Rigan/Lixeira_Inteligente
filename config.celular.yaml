@@ -1,0 +1,8 @@
+# PC sem webcam: usa o celular como câmera pelo Wi-Fi. Herda tudo de config.yaml.
+# PC e celular precisam estar na MESMA rede. Troque o IP pelo que o app mostrar.
+extends: config.yaml
+
+camera:
+  # IP Webcam (Android):         http://<IP-do-celular>:8080/video
+  # DroidCam (Android e iPhone): http://<IP-do-celular>:4747/video
+  url: http://192.168.0.10:8080/video

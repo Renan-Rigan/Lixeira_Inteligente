@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from lixeira.actuators import MockServo, Sorter  # noqa: E402
+from lixeira.camera import NetworkCamera, open_camera  # noqa: E402
 from lixeira.classifier import FakeClassifier, decide  # noqa: E402
 from lixeira.config import load_config  # noqa: E402
 from lixeira.dataset import materialize, scan_source, split_items  # noqa: E402
@@ -178,6 +179,39 @@ class TestClassifierVoting(unittest.TestCase):
         p = decide(clf, [with_obj(RED), with_obj(RED), with_obj(BLUE)], 0.0, "indefinido")
         self.assertEqual(p.raw_label, "plastico")
         self.assertAlmostEqual(sum(p.probs.values()), 1.0, places=5)
+
+
+class TestNetworkCamera(unittest.TestCase):
+    """O celular é simulado por um arquivo de vídeo: o cv2.VideoCapture abre
+    URL e arquivo do mesmo jeito."""
+
+    def _video(self, d):
+        path = str(Path(d) / "celular.avi")
+        out = cv2.VideoWriter(path, cv2.VideoWriter_fourcc(*"MJPG"), 15, (W, H))
+        for i in range(30):
+            out.write(with_obj(RED, x=10 + 5 * i))
+        out.release()
+        return path
+
+    def test_reads_resized_and_cropped_frames(self):
+        with tempfile.TemporaryDirectory() as d:
+            cam = NetworkCamera(self._video(d), 640, 480, warmup_frames=2, roi=[0, 0, 100, 50])
+            try:
+                self.assertEqual(cam.read().shape, (50, 100, 3))
+                self.assertEqual(cam.read().shape, (50, 100, 3))  # frame novo, sem travar
+            finally:
+                cam.close()
+
+    def test_open_camera_uses_url(self):
+        with tempfile.TemporaryDirectory() as d:
+            cfg = load_config(ROOT / "config.celular.yaml")
+            cfg["camera"].update(url=self._video(d), warmup_frames=0)
+            cam = open_camera(cfg)
+            try:
+                self.assertIsInstance(cam, NetworkCamera)
+                self.assertEqual(cam.read().shape, (480, 640, 3))
+            finally:
+                cam.close()
 
 
 class TestConfig(unittest.TestCase):

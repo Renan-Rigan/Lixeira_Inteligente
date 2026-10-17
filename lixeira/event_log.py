@@ -3,7 +3,7 @@
 O CSV alimenta a análise quantitativa da seção 5.5 (acurácia, tempo de resposta).
 As imagens salvas em data/inbox/<classe_prevista>/ são o "volante" do projeto:
 você revisa, move as que o modelo errou para a pasta certa, e elas entram no
-próximo treino (scripts/prepare_dataset.py --extra data/inbox).
+próximo treino (scripts/prepare_dataset.py --source data/inbox).
 """
 from __future__ import annotations
 

@@ -11,7 +11,7 @@ DEFAULTS: dict[str, Any] = {
     "classes": ["metal", "papel", "plastico"],
     "reject_label": "indefinido",
     "camera": {
-        "backend": "opencv", "index": 0, "width": 640, "height": 480,
+        "backend": "opencv", "index": 0, "url": None, "width": 640, "height": 480,
         "warmup_frames": 15, "roi": None,
     },
     "presence": {
