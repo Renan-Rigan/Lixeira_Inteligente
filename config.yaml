@@ -11,6 +11,7 @@ reject_label: indefinido
 camera:
   backend: opencv          # opencv (webcam USB / notebook) | picamera2 (câmera CSI do Pi)
   index: 0                 # índice da webcam (backend opencv)
+  url: null                # celular pelo Wi-Fi no lugar da webcam (veja config.celular.yaml)
   width: 640
   height: 480
   warmup_frames: 15        # frames descartados no início (auto-exposição estabilizar)
