@@ -8,8 +8,8 @@ from typing import Any
 import yaml
 
 DEFAULTS: dict[str, Any] = {
-    "classes": ["metal", "papel", "plastico"],
-    "reject_label": "indefinido",
+    "classes": ["metal", "plastico", "resto"],
+    "reject_label": "resto",
     "camera": {
         "backend": "opencv", "index": 0, "url": None, "width": 640, "height": 480,
         "warmup_frames": 15, "roi": None,
@@ -32,7 +32,11 @@ DEFAULTS: dict[str, Any] = {
                   "min_pulse_ms": 0.5, "max_pulse_ms": 2.5,
                   "open_s": 1.0, "settle_s": 0.4},
         "home_angle": 90, "return_home": True,
-        "bin_angles": {"metal": 0, "papel": 60, "plastico": 120, "indefinido": 180},
+        "bin_angles": {"metal": 0, "plastico": 60, "resto": 120},
+    },
+    "quality": {
+        "min_side": None, "blur_threshold": 40, "dark_threshold": 40,
+        "bright_threshold": 215, "contrast_threshold": 18, "max_aspect": 2.5,
     },
     "logging": {"dir": "logs", "save_images": True, "images_dir": "data/inbox"},
 }
@@ -64,8 +68,11 @@ def load_config(path: str | Path | None = "config.yaml") -> dict:
     """Lê o YAML e completa com os padrões. Valida o mapeamento classe -> ângulo."""
     user = _read_with_extends(Path(path)) if path else {}
     cfg = _merge(DEFAULTS, user)
+    if "bin_angles" in user.get("actuators", {}):
+        # bin_angles é um mapa completo: não herda compartimentos do padrão.
+        cfg["actuators"]["bin_angles"] = dict(user["actuators"]["bin_angles"])
 
-    labels = list(cfg["classes"]) + [cfg["reject_label"]]
+    labels = list(dict.fromkeys(list(cfg["classes"]) + [cfg["reject_label"]]))
     missing = [c for c in labels if c not in cfg["actuators"]["bin_angles"]]
     if missing:
         raise ValueError(f"Sem ângulo em actuators.bin_angles para: {missing}")

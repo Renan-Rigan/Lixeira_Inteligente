@@ -25,7 +25,9 @@ def analyze(rows: list[dict], classes, reject_label) -> dict:
     rows = [r for r in rows if r.get("true_label")]
     y_true = [r["true_label"] for r in rows]
     y_pred = [r["label"] for r in rows]
-    s = summarize(y_true, y_pred, classes, reject_label)
+    # rejeitado = o limiar de confiança trocou a classe vencedora pelo reject_label
+    rejected = [r["label"] != r["raw_label"] for r in rows]
+    s = summarize(y_true, y_pred, classes, reject_label, rejected)
     s["accuracy_ci95"] = wilson_interval(round(s["accuracy"] * s["n"]), s["n"])
     s["latency"] = latency_stats([float(r["total_ms"]) for r in rows])
     s["inference"] = latency_stats([float(r["infer_ms"]) for r in rows])

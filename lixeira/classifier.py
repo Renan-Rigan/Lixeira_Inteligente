@@ -46,16 +46,16 @@ class YoloClassifier:
 class FakeClassifier:
     """Classificador de mentira para testar o resto do sistema sem modelo treinado.
     Olha a cor média dos pixels que fogem do fundo:
-    azulado -> metal, claro -> papel, avermelhado -> plastico."""
+    azulado -> metal, avermelhado -> plastico, esverdeado -> resto (orgânico)."""
 
-    def __init__(self, names: Sequence[str] = ("metal", "papel", "plastico"), **_ignored):
+    def __init__(self, names: Sequence[str] = ("metal", "plastico", "resto"), **_ignored):
         self.names = list(names)
 
     def predict_probs(self, image: np.ndarray) -> np.ndarray:
         px = image.reshape(-1, 3).astype(np.float32)
         far = np.abs(px - np.median(px, axis=0)).max(axis=1) > 30
         b, g, r = (px[far] if far.any() else px).mean(axis=0)
-        scores = {"metal": b - r, "papel": (b + g + r) / 3 - 128, "plastico": r - b}
+        scores = {"metal": b - r, "plastico": r - b, "resto": g - (b + r) / 2}
         v = np.array([scores.get(n, 0.0) for n in self.names], dtype=np.float32) / 20
         e = np.exp(v - v.max())
         return e / e.sum()
@@ -73,12 +73,35 @@ def decide(classifier: Classifier, images: Sequence[np.ndarray],
         total += classifier.predict_probs(img)
     infer_ms = (time.perf_counter() - t0) * 1000
     probs = total / max(len(images), 1)
+    return from_probs(probs, classifier.names, conf_threshold, reject_label, infer_ms)
+
+
+def from_probs(probs: np.ndarray, names: Sequence[str], conf_threshold: float,
+               reject_label: str, infer_ms: float = 0.0) -> Prediction:
+    """Classe vencedora; abaixo do limiar de confiança vira reject_label."""
     best = int(np.argmax(probs))
     conf = float(probs[best])
-    raw = classifier.names[best]
+    raw = names[best]
     label = raw if conf >= conf_threshold else reject_label
-    return Prediction(label, conf, raw,
-                      {n: float(p) for n, p in zip(classifier.names, probs)}, infer_ms)
+    return Prediction(label, conf, raw, {n: float(p) for n, p in zip(names, probs)}, infer_ms)
+
+
+class ProbSmoother:
+    """Média móvel exponencial das probabilidades, para o modo ao vivo
+    (scripts/live.py): a resposta não pisca de um frame para o outro."""
+
+    def __init__(self, n_classes: int, alpha: float = 0.3):
+        self.alpha = alpha
+        self.probs = np.full(n_classes, 1.0 / n_classes, dtype=np.float32)
+        self._first = True
+
+    def update(self, probs: np.ndarray) -> np.ndarray:
+        probs = np.asarray(probs, dtype=np.float32)
+        if self._first:
+            self.probs, self._first = probs.copy(), False
+        else:
+            self.probs = (1 - self.alpha) * self.probs + self.alpha * probs
+        return self.probs
 
 
 def build_classifier(cfg: dict) -> Classifier:

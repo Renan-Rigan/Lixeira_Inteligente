@@ -17,20 +17,31 @@ def confusion_matrix(y_true: Sequence[str], y_pred: Sequence[str],
 
 
 def summarize(y_true: Sequence[str], y_pred: Sequence[str], classes: Sequence[str],
-              reject_label: str | None = None) -> dict:
+              reject_label: str | None = None,
+              rejected: Sequence[bool] | None = None) -> dict:
     """Acurácia geral, taxa de rejeição e precisão/recall/F1 por classe.
 
-    - accuracy: acertos / total (rejeitado conta como erro — visão do usuário)
-    - accuracy_accepted: acertos / itens não rejeitados (qualidade do que foi separado)
-    - reject_rate: fração mandada para o compartimento 'indefinido'
+    - accuracy: acertos / total (visão do usuário: o resíduo foi para o lugar certo?)
+    - accuracy_accepted: acertos / itens que passaram do limiar de confiança
+    - reject_rate: fração mandada para reject_label por falta de confiança
+
+    `rejected` diz, item a item, se a decisão veio do limiar de confiança. É
+    necessário quando reject_label também é uma classe (ex.: "resto"): aí não dá
+    para saber pela previsão se foi "resto" com confiança ou por rejeição.
+    Sem ele, conta como rejeitado tudo o que foi previsto como reject_label.
     """
     y_true, y_pred = list(y_true), list(y_pred)
     n = len(y_true)
     labels = list(classes) + ([reject_label] if reject_label and reject_label not in classes else [])
     cm = confusion_matrix(y_true, y_pred, labels)
-    correct = sum(t == p for t, p in zip(y_true, y_pred))
-    rejected = sum(p == reject_label for p in y_pred) if reject_label else 0
-    accepted = n - rejected
+    correct_flags = [t == p for t, p in zip(y_true, y_pred)]
+    correct = sum(correct_flags)
+    if rejected is None:
+        rejected = [bool(reject_label) and p == reject_label for p in y_pred]
+    rejected = list(rejected)
+    n_rejected = sum(rejected)
+    accepted = n - n_rejected
+    correct_accepted = sum(c for c, r in zip(correct_flags, rejected) if not r)
     per_class = {}
     for i, c in enumerate(classes):
         tp = cm[i, i]
@@ -43,8 +54,8 @@ def summarize(y_true: Sequence[str], y_pred: Sequence[str], classes: Sequence[st
     return {
         "n": n,
         "accuracy": correct / n if n else 0.0,
-        "accuracy_accepted": correct / accepted if accepted else 0.0,
-        "reject_rate": rejected / n if n else 0.0,
+        "accuracy_accepted": correct_accepted / accepted if accepted else 0.0,
+        "reject_rate": n_rejected / n if n else 0.0,
         "labels": labels,
         "confusion_matrix": cm.tolist(),
         "per_class": per_class,
@@ -79,7 +90,7 @@ def to_markdown(s: dict, title: str = "Avaliação") -> str:
         lo, hi = s["accuracy_ci95"]
         lines.append(f"- IC 95% da acurácia: {lo:.1%} – {hi:.1%}")
     lines += [f"- Acurácia entre os não rejeitados: {s['accuracy_accepted']:.1%}",
-              f"- Taxa de rejeição (indefinido): {s['reject_rate']:.1%}", ""]
+              f"- Taxa de rejeição (abaixo do limiar de confiança): {s['reject_rate']:.1%}", ""]
     if s.get("latency"):
         L = s["latency"]
         lines += [f"- Latência: média {L['mean_ms']:.1f} ms · p95 {L['p95_ms']:.1f} ms", ""]

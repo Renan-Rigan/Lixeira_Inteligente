@@ -3,10 +3,14 @@
 
 # Classes do modelo. A ordem não importa (o modelo YOLO guarda os nomes),
 # mas os nomes precisam bater com as pastas do dataset e com bin_angles abaixo.
-classes: [metal, papel, plastico]
+#   metal     latas de bebida/alimento
+#   plastico  garrafas PET
+#   resto     tudo o que não é metal nem PET (na prática, orgânicos)
+classes: [metal, plastico, resto]
 
 # Para onde vai um resíduo que o modelo não reconheceu com confiança.
-reject_label: indefinido
+# É o próprio "resto": na dúvida, não contamina os recicláveis.
+reject_label: resto
 
 camera:
   backend: opencv          # opencv (webcam USB / notebook) | picamera2 (câmera CSI do Pi)
@@ -63,9 +67,19 @@ actuators:
   # Ângulo da base para cada compartimento (calibre com scripts/servo_test.py).
   bin_angles:
     metal: 0
-    papel: 60
-    plastico: 120
-    indefinido: 180
+    plastico: 60
+    resto: 120
+
+quality:
+  # Verificação das imagens de treino (scripts/check_images.py). A referência é
+  # o que o modelo vê no Raspberry Pi: frame camera.width x camera.height,
+  # recortado na ROI e reduzido para classifier.imgsz.
+  min_side: null           # lado menor mínimo em px; null = classifier.imgsz
+  blur_threshold: 40       # nitidez (Laplaciano nos blocos mais nítidos, escala do Pi); abaixo = borrada
+  dark_threshold: 40       # brilho médio (0-255) abaixo disso = escura demais
+  bright_threshold: 215    # brilho médio acima disso = clara/estourada demais
+  contrast_threshold: 18   # desvio padrão do cinza abaixo disso = sem contraste (aviso)
+  max_aspect: 2.5          # proporção maior que isso perde o objeto no corte central (aviso)
 
 logging:
   dir: logs                # events.csv com cada descarte (classe, confiança, tempos)

@@ -5,7 +5,7 @@
 Comandos:
   b <ângulo>     move a base           (ex.: b 60)
   h <ângulo>     move a escotilha      (ex.: h 90)
-  d <classe>     ciclo completo de descarte (ex.: d papel)
+  d <classe>     ciclo completo de descarte (ex.: d plastico)
   ciclo <n>      repete n descartes por todas as classes (ensaio repetitivo)
   q              sai
 Anote os ângulos que alinham cada compartimento e coloque em actuators.bin_angles.
