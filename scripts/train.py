@@ -1,5 +1,9 @@
 """Treina o classificador YOLO com transfer learning (seção 5.2 do projeto).
 
+O YOLO-cls é uma rede neural convolucional (CNN) pré-treinada no ImageNet; aqui
+só as classes mudam: metal, plastico (PET) e resto. Monte o dataset antes com
+scripts/prepare_dataset.py (fotos próprias e/ou banco de imagens).
+
 Rode no PC/notebook com GPU ou no Google Colab — NÃO no Raspberry Pi.
 
   python scripts/train.py                              # yolo11n-cls, 50 épocas

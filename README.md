@@ -7,25 +7,25 @@ possível do tempo real.
 
 | Compartimento | Material | Exemplos |
 |---|---|---|
-| `metal` | metal | latas de bebida e de alimento, tampinhas |
-| `papel` | papel e papelão | folhas, jornal, caixas, embalagens de papelão |
-| `plastico` | plástico | garrafas PET, potes, embalagens, copos |
-| `indefinido` | rejeito | qualquer item que o modelo não reconheça com confiança |
+| `metal` | metal | latas de bebida e de alimento |
+| `plastico` | garrafa PET | garrafas de refrigerante, água, suco |
+| `resto` | todo o resto (na prática, orgânicos) | restos de comida, cascas, guardanapo, e qualquer item que o modelo não reconheça com confiança |
 
 ```
-câmera ──► OpenCV: tem objeto parado? ──► YOLO-cls: qual material? ──► servos: base gira, escotilha abre
-(Pi/celular) (presence.py)                 (classifier.py, 3 frames)    (actuators.py)
+câmera ──► OpenCV: tem objeto parado? ──► YOLO-cls (CNN): qual material? ──► servos: base gira, escotilha abre
+(Pi/celular) (presence.py)                 (classifier.py, 3 frames)          (actuators.py)
                                                     │
                                     logs/events.csv + data/inbox/  ──► revisão ──► novo treino
 ```
 
 ## Decisões de projeto
 
-- **Metal, papel e plástico, sem vidro.** São os recicláveis mais comuns no lixo
-  doméstico, têm aparência bem diferente entre si (brilho, textura fosca,
-  transparência ou cores fortes) e aparecem em datasets públicos como o TrashNet.
-  O vidro ficou de fora porque pode quebrar no mecanismo e se confunde com
-  plástico transparente.
+- **Metal, garrafa PET e resto.** Latas e garrafas PET são os recicláveis mais
+  comuns e têm aparência bem definida (brilho metálico; plástico transparente
+  com rótulo e tampa), o que facilita chegar a uma acurácia alta. Todo o resto
+  (orgânicos, guardanapo, vidro...) vai para `resto`. `plastico` é **só PET**:
+  sacolas e potes de bancos públicos ficam de fora do treino para o modelo não
+  aprender que "plástico transparente" pode ser `resto`.
 - **OpenCV detecta presença, YOLO classifica.** A comparação com o fundo vazio é
   quase gratuita no Pi; o modelo só roda quando há um objeto **parado** na
   plataforma (a mão do usuário já saiu). Isso economiza CPU e evita classificar
@@ -33,10 +33,13 @@ câmera ──► OpenCV: tem objeto parado? ──► YOLO-cls: qual material? 
 - **YOLO no modo *classify*, não *detect*.** A lixeira recebe um objeto por vez
   numa área controlada, então classificar a imagem inteira basta. É mais rápido,
   mais preciso e o dataset é só "uma pasta por classe", sem desenhar caixas.
-- **Compartimento `indefinido`.** Se a confiança ficar abaixo do limiar
-  (`classifier.conf_threshold`), o resíduo vai para um 4º compartimento em vez de
-  contaminar os recicláveis. Errar para "indefinido" custa menos que errar de
-  material.
+- **Na dúvida, `resto`.** Se a confiança ficar abaixo do limiar
+  (`classifier.conf_threshold`), o resíduo vai para `resto` (`reject_label`) em
+  vez de contaminar os recicláveis. Errar para `resto` custa menos que pôr
+  orgânico junto das latas. Nos relatórios, "rejeição" conta só o que foi para
+  `resto` por falta de confiança, não o `resto` previsto com certeza.
+- **Rede neural convolucional (CNN).** O YOLO-cls é uma CNN; veja
+  [Por que CNN](#por-que-uma-rede-neural-convolucional-cnn).
 - **Votação em 3 frames.** As probabilidades de 3 frames são somadas, o que reduz
   erro por reflexo ou borrão.
 - **Escotilha nunca abre girando.** Há uma trava no código (`Sorter._rotate`).
@@ -48,7 +51,7 @@ câmera ──► OpenCV: tem objeto parado? ──► YOLO-cls: qual material? 
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-python -m unittest discover tests -v          # 20 testes, sem câmera/modelo/servo
+python -m unittest discover tests -v          # 34 testes, sem câmera/modelo/servo
 python run.py --fake-model --show             # webcam + classificador falso + servos simulados
 ```
 
@@ -76,6 +79,7 @@ são procurados a partir do diretório atual.
 ```bash
 python scripts/calibrate_roi.py --config config.celular.yaml   # recorta só a plataforma
 python scripts/collect.py --config config.celular.yaml         # fotos para o dataset
+python scripts/live.py --config config.celular.yaml            # identificação ao vivo (sem plataforma)
 python run.py --config config.celular.yaml --fake-model --show # sistema completo, sem modelo
 python run.py --config config.celular.yaml --show              # com o modelo treinado
 ```
@@ -83,14 +87,131 @@ python run.py --config config.celular.yaml --show              # com o modelo tr
 A leitura do stream roda numa thread que guarda só o frame mais recente (sem
 atraso acumulado) e reconecta sozinha se o Wi-Fi cair.
 
+## Treino com banco de imagens + teste ao vivo pelo celular
+
+Dá para treinar o modelo antes de ter o protótipo, com um **banco de imagens**
+(pronto ou montado por você), e usar o **celular** para simular a identificação
+em tempo real.
+
+```
+banco de imagens ──► check_images.py ──► prepare_dataset.py ──► train.py ──► live.py (celular)
+(data/bancos/)       qualidade (régua:     mapeia pastas →        CNN           classifica ao vivo,
+                     câmera do Pi)         metal/plastico/resto                 salva frames de teste
+```
+
+### 1. Escolher o banco
+
+Pronto ou próprio? **Os dois, em etapas.** Um banco pronto dá volume logo no
+começo (milhares de imagens); fotos próprias, tiradas com a câmera e a luz da
+lixeira, são o que mais pesa na acurácia do protótipo. Comece pelo pronto, teste
+com o celular e vá acrescentando fotos suas onde o modelo errar.
+
+| Banco | O que tem | Serve para |
+|---|---|---|
+| Drinking Waste Classification (Kaggle) | latas de alumínio, garrafas PET, vidro, HDPE | `metal` e `plastico` (PET) |
+| RealWaste (UCI, CC BY 4.0) | 4.752 fotos 524×524 em 9 classes, incl. *Food Organics* e *Vegetation* | `resto` (orgânicos) e `metal` |
+| TrashNet | 2.527 fotos 512×384, fundo branco, 6 classes | complemento |
+| Garbage Classification, 12 classes (Kaggle) | inclui *biological* (orgânico) | complemento para `resto` |
+
+Confira a licença de cada um antes de usar na IC. Baixe cada banco para
+`data/bancos/<nome>/` (a pasta `data/` não vai para o git), mantendo uma
+subpasta por classe, do jeito que eles vêm.
+
+### 2. Verificar a qualidade (régua: câmera do Raspberry Pi)
+
+```bash
+python scripts/check_images.py data/bancos/drinking_waste data/bancos/realwaste
+```
+
+A câmera do Pi tem sensor de 5 a 12 MP (v1: 2592×1944, v2: 3280×2464, Module 3:
+4608×2592), mas **não é isso que o modelo vê**: o sistema captura o stream em
+640×480 (`camera.width/height`), recorta a ROI e o YOLO reduz para 224×224
+(`classifier.imgsz`). Por isso o `check_images.py` usa o `config.pi.yaml` como
+régua e marca:
+
+| Verificação | Erro (fica de fora) | Aviso |
+|---|---|---|
+| resolução | lado menor < 224 px (seria ampliada: mais borrada que o Pi) | menor que o frame do Pi (640×480) |
+| nitidez | borrada (Laplaciano < `blur_threshold`, medido na escala do Pi) | — |
+| brilho | escura (< 40) ou estourada (> 215) | pouco contraste |
+| repetidas | mesma imagem em classes diferentes ou em treino e teste | cópias na mesma classe |
+| arquivo | não abre | proporção > 2,5:1 (o corte central perde o objeto) |
+
+Imagens maiores que o frame do Pi não são problema: use `--max-side 640` no
+`prepare_dataset.py` para reduzi-las (menos disco, treino mais rápido). O
+relatório (`reports/qualidade_*.md` e `.csv`) traz as medianas de nitidez e
+brilho por classe; rode também nas suas fotos (`data/raw`) e compare: se o banco
+for muito mais nítido ou claro que a sua câmera, ajuste os limiares em
+`quality:` no `config.yaml`. `--quarantine data/reprovadas` move as imagens com
+erro para revisão.
+
+### 3. Montar o dataset
+
+Os bancos usam nomes próprios de pasta; `--map` traduz para as classes do
+projeto. Pastas que já se chamam `metal` (ou `Metal`) não precisam de `--map`;
+`--map "*=resto"` manda o que sobrou para `resto`; `--map Pasta=` descarta.
+
+```bash
+python scripts/prepare_dataset.py \
+    --source data/bancos/drinking_waste --source data/bancos/realwaste \
+    --map PET=plastico --map AluCans=metal --map HDPEM= --map Plastic= \
+    --map "*=resto" --max-per-class 1500 --max-side 640 --check-quality
+```
+
+- `--max-per-class` evita que `resto` (que junta várias pastas) fique muito
+  maior que as outras classes. Fotos suas nunca são cortadas, só as do banco.
+- `--check-quality` deixa de fora as imagens com erro no `check_images.py`.
+- Com só bancos em `--source`, eles são divididos em treino/val/teste. A
+  acurácia nesse teste sai **otimista** (mesma fonte, mesma luz). Quando tiver
+  fotos suas, passe os bancos para `--train-only` e use as suas em `--source`.
+
+### 4. Treinar e testar ao vivo com o celular
+
+```bash
+python scripts/train.py                                     # gera models/best.pt
+python scripts/live.py --config config.celular.yaml         # aponte o celular para os resíduos
+```
+
+O `live.py` classifica cada quadro, mostra a classe e as probabilidades
+(suavizadas entre quadros), avisa se a imagem está borrada ou escura e desenha o
+quadrado central, que é o que o modelo recebe. O stream do celular é reduzido
+para 640×480, a mesma resolução do Pi. Não precisa de fundo fixo nem de suporte.
+Aperte `s` para salvar o quadro em `data/live/<classe prevista>/`: revise
+(mova os erros para a pasta certa) e use como teste de verdade:
+`--source data/live`.
+
+## Por que uma rede neural convolucional (CNN)
+
+"Rede convolucional" e "CNN" são a mesma coisa: CNN é a sigla em inglês de
+*Convolutional Neural Network* (rede neural convolucional). O projeto já usa uma:
+o **YOLO11n-cls** é uma CNN de classificação. As camadas de convolução aprendem
+filtros que respondem a bordas, brilho, texturas e formas, que é exatamente o
+que separa lata (reflexo metálico), PET (transparência, rótulo, tampa) e
+orgânico (textura irregular, cores de alimento).
+
+Para este caso, a melhor escolha é uma **CNN leve com transfer learning**:
+
+| Opção | Por que (não) |
+|---|---|
+| **YOLO11n-cls** (usado) | CNN pequena (~1,6 M parâmetros), pré-treinada no ImageNet, treina com uma pasta por classe e exporta para NCNN, que é o formato mais rápido no Pi. Dezenas de ms por imagem no Pi 4/5. |
+| MobileNetV3 / EfficientNet-Lite | CNNs leves equivalentes; dariam resultado parecido, mas exigem escrever o treino e a exportação à mão. |
+| CNN treinada do zero | Precisaria de muito mais imagens; o transfer learning aproveita o que a rede já sabe de milhões de fotos. |
+| Vision Transformer (ViT) | Não é convolucional; precisa de mais dados e é pesado demais para o Pi. |
+| YOLO *detect* (caixas) | Também é CNN, mas exige desenhar caixas no dataset; só vale se houver vários objetos ao mesmo tempo. |
+
+Se precisar de mais acurácia e o Pi aguentar a latência, teste
+`--model yolo11s-cls.pt` no `train.py` (mesma CNN, maior).
+
 ## Ciclo de trabalho (o que você vai repetir ao longo da IC)
 
 1. **Coletar fotos** na plataforma real, com os LEDs ligados:
    `python scripts/collect.py` (sem webcam: `--config config.celular.yaml`). Aperte `n` a cada objeto novo e `r` para tirar
-   uma rajada enquanto gira o objeto. Mire em **objetos variados** (amassados,
-   sujos, com rótulo, transparentes), não em muitas fotos do mesmo.
-2. **Montar o dataset**: `python scripts/prepare_dataset.py --source data/raw`
-   (exemplos com dataset público no `--help`).
+   uma rajada enquanto gira o objeto. Mire em **objetos variados** (latas e
+   garrafas amassadas, sujas, com e sem rótulo; vários tipos de orgânico), não
+   em muitas fotos do mesmo.
+2. **Verificar e montar o dataset**: `python scripts/check_images.py data/raw` e
+   `python scripts/prepare_dataset.py --source data/raw` (exemplos com banco de
+   imagens no `--help` e na seção acima).
 3. **Treinar** (PC com GPU ou Google Colab): `python scripts/train.py`. Sem GPU
    no PC, o treino funciona, mas é lento: leve `data/dataset/` para o Colab e
    traga de volta o `models/best.pt`.
@@ -107,10 +228,9 @@ atraso acumulado) e reconecta sozinha se o Wi-Fi cair.
 - O split é feito **por objeto** (prefixo `objXXXX__`). Fotos do mesmo objeto
   nunca ficam em treino e teste ao mesmo tempo. Sem isso, a acurácia fica
   inflada e cai no protótipo.
-- Datasets públicos entram **só no treino** (`--train-only`). Eles ajudam no
-  começo, mas o teste precisa refletir a sua câmera e a sua luz. Um bom ponto de
-  partida é o TrashNet (classes glass, paper, cardboard, plastic, metal, trash).
-  Mapeie `cardboard` para `papel`.
+- Quando tiver fotos suas, bancos públicos entram **só no treino**
+  (`--train-only`). Eles ajudam no começo, mas o teste precisa refletir a sua
+  câmera e a sua luz.
 - Com poucos itens de teste, 90% é incerto: com 50 itens e 45 acertos, o IC 95%
   vai de ~79% a ~96%. Reporte o intervalo, não só o número.
 - Comece por volta de **30+ objetos diferentes por classe** e cresça a partir dos
@@ -135,7 +255,7 @@ GND comum ao Pi. Puxar a corrente dos servos pelo Pi causa reinicializações.
 ## Testes experimentais (seção 5.5)
 
 ```bash
-python run.py --config config.pi.yaml --true-label papel   # descarte só papéis nesta sessão
+python run.py --config config.pi.yaml --true-label plastico   # descarte só garrafas PET nesta sessão
 python run.py --config config.pi.yaml --true-label metal
 python scripts/analyze_events.py                           # acurácia, matriz, tempos
 ```
@@ -145,7 +265,7 @@ mecânica e a câmera não vê. Anote à parte ou use `scripts/servo_test.py`
 (`ciclo 20`) para os ensaios repetitivos da seção 6.4.
 
 Antes de ter o protótipo, dá para fazer as mesmas sessões no PC com o celular e
-servos simulados: `python run.py --config config.celular.yaml --show --true-label papel`.
+servos simulados: `python run.py --config config.celular.yaml --show --true-label plastico`.
 
 ### Tempo de resposta
 
@@ -162,7 +282,9 @@ reduza esses tempos no `config.yaml` até o limite que o protótipo aguentar.
 | Seção do projeto | Arquivo |
 |---|---|
 | 5.1 Captura de imagens | `lixeira/camera.py`, `scripts/collect.py`, `scripts/calibrate_roi.py`, `config.celular.yaml` |
-| 5.2 Modelo (transfer learning, aumento de dados) | `scripts/prepare_dataset.py`, `scripts/train.py` |
+| Qualidade das imagens (régua: câmera do Pi) | `lixeira/quality.py`, `scripts/check_images.py` |
+| 5.2 Modelo (CNN, transfer learning, aumento de dados) | `lixeira/dataset.py`, `scripts/prepare_dataset.py`, `scripts/train.py` |
+| Identificação ao vivo pelo celular | `scripts/live.py` |
 | 5.3 Mecanismo (base + escotilha) | `lixeira/actuators.py`, `scripts/servo_test.py` |
 | 5.4 Integração (detecção → decisão → ação) | `lixeira/pipeline.py`, `run.py` |
 | 5.5 Testes e validação | `scripts/evaluate.py`, `scripts/analyze_events.py`, `logs/events.csv` |
@@ -175,8 +297,8 @@ config.yaml                    parâmetros (PC com webcam, servos simulados)
 config.celular.yaml            PC sem webcam: celular como câmera pelo Wi-Fi
 config.pi.yaml                 Raspberry Pi (Picamera2, NCNN, servos reais)
 run.py                         programa principal
-lixeira/                       câmera, presença, classificador, servos, pipeline, log, métricas, dataset
-scripts/                       coleta, dataset, treino, avaliação, exportação, calibração
+lixeira/                       câmera, presença, classificador, servos, pipeline, log, métricas, dataset, qualidade
+scripts/                       coleta, qualidade, dataset, treino, ao vivo, avaliação, exportação, calibração
 tests/                         testes com imagens sintéticas (sem hardware)
 ```
 

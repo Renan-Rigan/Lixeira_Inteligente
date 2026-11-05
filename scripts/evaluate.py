@@ -61,7 +61,10 @@ def main(argv=None):
     def preds_at(t):
         return [clf.names[b] if cf >= t else cfg["reject_label"] for b, cf in zip(best, conf)]
 
-    s = summarize(y_true, preds_at(thr), clf.names, cfg["reject_label"])
+    def rejected_at(t):
+        return [bool(cf < t) for cf in conf]
+
+    s = summarize(y_true, preds_at(thr), clf.names, cfg["reject_label"], rejected_at(thr))
     correct = round(s["accuracy"] * s["n"])
     s["accuracy_ci95"] = wilson_interval(correct, s["n"])
     s["latency"] = latency_stats(lat)
@@ -69,7 +72,7 @@ def main(argv=None):
     s["weights"] = str(weights)
     s["threshold_sweep"] = []
     for t in (0.0, 0.5, 0.6, 0.7, 0.8, 0.9):
-        st = summarize(y_true, preds_at(t), clf.names, cfg["reject_label"])
+        st = summarize(y_true, preds_at(t), clf.names, cfg["reject_label"], rejected_at(t))
         s["threshold_sweep"].append({"threshold": t, "accuracy": st["accuracy"],
                                      "accuracy_accepted": st["accuracy_accepted"],
                                      "reject_rate": st["reject_rate"]})

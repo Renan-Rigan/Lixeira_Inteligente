@@ -1,11 +1,11 @@
 """Executa a lixeira: câmera -> presença -> YOLO -> servos.
 
 Exemplos:
-  python run.py --show                         # PC com webcam, servos simulados
-  python run.py --fake-model --show            # sem modelo treinado ainda
-  python run.py --config config.pi.yaml        # no Raspberry Pi
-  python run.py --show --true-label papel      # sessão de teste: registra o rótulo
-                                               # verdadeiro para medir acurácia
+  python run.py --show                           # PC com webcam, servos simulados
+  python run.py --fake-model --show              # sem modelo treinado ainda
+  python run.py --config config.pi.yaml          # no Raspberry Pi
+  python run.py --show --true-label plastico     # sessão de teste: registra o rótulo
+                                                 # verdadeiro para medir acurácia
 Teclas (com --show): q sai, b reaprende o fundo vazio.
 """
 from __future__ import annotations
